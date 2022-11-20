@@ -4,6 +4,6 @@ This project is to build an Enhanced layer of security against DDoS attack using
 
 ## How to run?
 
-Go to ddos_auth_frontend, and run command "npm install" - need to be done once
-To run the frontend, run command "npm start"
-To run the backed, run command "python main.py"
+To install frontend packages, go to ddos_auth_frontend, and run command "npm install" (Need to be done once) <br />
+To run the frontend, go to ddos_auth_frontend, and run command "npm start" <br />
+To run the backend, go to ddos_auth_backend, run command "python main.py"
