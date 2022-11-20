@@ -34,7 +34,6 @@ export class Register extends Component {
       return;
     }
     video.loadPixels();
-    console.log(video.canvas);
     const image64 = video.canvas.toDataURL();
     const response = await axios.post("http://localhost:5000/register", {
       image64: image64,
