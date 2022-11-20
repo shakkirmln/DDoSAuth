@@ -1,4 +1,4 @@
-# Getting Started with Create React App
+# Enhanced layer of protection again DDoS
 
 This project is to build an Enhanced layer of security against DDoS attack using Image and Voice recognition built in React and Flask.
 

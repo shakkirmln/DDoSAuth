@@ -77,17 +77,21 @@ def who_is_it(image_path, database, model):
     print(image_path)
     encoding = img_to_encoding(image_path, model)
     min_dist = 1000
-    # Loop over the database dictionary's names and encodings.
-    for (name, db_enc) in database.items():
-        dist = np.linalg.norm(encoding-db_enc)
-        print(dist)
-        if dist < min_dist:
-            min_dist = dist
-            identity = name
-    if min_dist > 5:
-        print("Not in the database.")
+    identity = None
+    if len(database) == 0:
+        print("No one is registered in the database!")
     else:
-        print("it's " + str(identity) + ", the distance is " + str(min_dist))
+        # Loop over the database dictionary's names and encodings.
+        for (name, db_enc) in database.items():
+            dist = np.linalg.norm(encoding-db_enc)
+            print(dist)
+            if dist < min_dist:
+                min_dist = dist
+                identity = name
+        if min_dist > 5:
+            print("Not in the database.")
+        else:
+            print("it's " + str(identity) + ", the distance is " + str(min_dist))
     return min_dist, identity
 
 
