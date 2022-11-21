@@ -20,11 +20,31 @@ sess = tf.Session()
 set_session(sess)
 
 model = tf.keras.models.load_model('facenet_keras.h5')
+face_model = cv2.dnn.readNetFromCaffe('deploy.prototxt', 'weights.caffemodel')
+
 # model.summary()
 
 
 def img_to_encoding(path, model):
     img1 = cv2.imread(path, 1)
+    # Face extraction
+    (h, w) = img1.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.resize(
+        img1, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
+    face_model.setInput(blob)
+    detections = face_model.forward()
+    count = 0
+    for i in range(0, detections.shape[2]):
+        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+        (startX, startY, endX, endY) = box.astype("int")
+        confidence = detections[0, 0, i, 2]
+        # If confidence > 0.5, face is detected
+        if (confidence > 0.5):
+            count += 1
+            frame = img1[startY:endY, startX:endX]
+            img1 = frame
+    if count == 0 or count > 1:
+        return []
     img = img1[..., ::-1]
     dim = (160, 160)
     # resize image
@@ -33,7 +53,7 @@ def img_to_encoding(path, model):
     x_train = np.array([img])
     print(x_train)
     embedding = model.predict(x_train)
-    # print("embedding",embedding)
+    print("embedding", embedding)
     return embedding
 
 
@@ -67,7 +87,10 @@ def register():
         global graph
         with graph.as_default():
             set_session(sess)
-            database[username] = img_to_encoding(path, model)
+            encoding = img_to_encoding(path, model)
+            if len(encoding) == 0:
+                return json.dumps({"status": 500, "msg": "Either no face detected or more than one face detected!"})
+            database[username] = encoding
         return json.dumps({"status": 200})
     except:
         return json.dumps({"status": 500})
@@ -76,6 +99,8 @@ def register():
 def who_is_it(image_path, database, model):
     print(image_path)
     encoding = img_to_encoding(image_path, model)
+    if len(encoding) == 0:
+        return -1, -1
     min_dist = 1000
     identity = None
     if len(database) == 0:
@@ -108,6 +133,8 @@ def change():
         set_session(sess)
         min_dist, identity = who_is_it(path, database, model)
     os.remove(path)
+    if min_dist == -1 and identity == -1:
+        return json.dumps({"msg": "Either no face detected or more than one face detected"})
     if min_dist > 5:
         return json.dumps({"identity": 0})
     return json.dumps({"identity": str(identity)})

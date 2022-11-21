@@ -39,9 +39,15 @@ export class Register extends Component {
       image64: image64,
       username: mood,
     });
-    if (response.status === 200) {
+    if (response.data.status === 200) {
       this.stop();
       alert("Registered!");
+    } else {
+      if (response.data.msg) {
+        alert(response.data.msg);
+      } else {
+        alert("Error!");
+      }
     }
     this.props.backhome();
   };

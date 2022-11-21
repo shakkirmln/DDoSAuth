@@ -49,7 +49,11 @@ export class Login extends Component {
       });
     } else {
       this.stop();
-      alert("Not a registered user!");
+      if (response.data.msg) {
+        alert(response.data.msg);
+      } else {
+        alert("Not a registered user!");
+      }
       this.props.backhome();
     }
   };

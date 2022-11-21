@@ -19,18 +19,18 @@ export class App extends Component {
 
   componentWillMount() {
     // define increment counter part
-    const tabsOpen = localStorage.getItem("tabsOpen");
+    const reqCnt = localStorage.getItem("reqCnt");
     const startTimestamp = localStorage.getItem("startTimestamp");
     const endTimeStamp = new Date().getTime();
-    console.log("tabsOpen", tabsOpen);
-    if (tabsOpen == null) {
-      localStorage.setItem("tabsOpen", 1);
+    console.log("requestCount", reqCnt);
+    if (reqCnt == null) {
+      localStorage.setItem("reqCnt", 1);
       localStorage.setItem("startTimestamp", endTimeStamp);
     } else {
       var timeDiff = endTimeStamp - startTimestamp;
       if (timeDiff < 30000) {
-        localStorage.setItem("tabsOpen", parseInt(tabsOpen) + parseInt(1));
-        if (tabsOpen > 10) {
+        localStorage.setItem("reqCnt", parseInt(reqCnt) + parseInt(1));
+        if (reqCnt > 10) {
           this.backhome();
         } else {
           this.setState({
@@ -45,7 +45,7 @@ export class App extends Component {
           verify: false,
           home: true,
         });
-        localStorage.setItem("tabsOpen", 1);
+        localStorage.setItem("reqCnt", 1);
         localStorage.setItem("startTimestamp", endTimeStamp);
       }
     }
