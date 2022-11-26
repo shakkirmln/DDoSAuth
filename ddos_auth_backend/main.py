@@ -4,12 +4,15 @@ from tensorflow.compat.v1.keras.backend import set_session
 from datetime import datetime
 import base64
 from flask_cors import CORS
+from flask import jsonify
 import numpy as np
 import json
 import cv2
 from flask import Flask, request
 import os
 import tensorflow.compat.v1 as tf
+import speech_recognition as sr
+import moviepy.editor as moviepy
 tf.disable_v2_behavior()
 
 graph = tf.get_default_graph()
@@ -21,6 +24,7 @@ set_session(sess)
 
 model = tf.keras.models.load_model('facenet_keras.h5')
 face_model = cv2.dnn.readNetFromCaffe('deploy.prototxt', 'weights.caffemodel')
+r = sr.Recognizer()
 
 # model.summary()
 
@@ -72,6 +76,76 @@ def verify(image_path, identity, database, model):
         print("It's not " + str(identity) + ", please go away")
         match = False
     return dist, match
+
+
+@app.route('/captcha', methods=['POST'])
+def captcha():
+    # blob = request.data
+    file = request.files['audio_file']
+    print(file.content_type)
+    file.save(os.path.abspath(f'audios/recording.wav'))
+
+    # with open(os.path.abspath(f'audios/recording.wav'), 'ab') as f:
+    #     f.write(blob)
+
+    # sample_audio = wave.open(f'audios/recording.wav', 'rb')
+    # nchannels = sample_audio.getnchannels()
+    # sampwidth = sample_audio.getsampwidth()
+    # framerate = sample_audio.getframerate()
+    # nframes = sample_audio.getnframes()
+    # sample_audio.close()
+
+    # audio = wave.open(f'audios/recording1.wav', 'wb')
+    # audio.setnchannels(1)
+    # audio.setsampwidth(2)
+    # audio.setframerate(framerate)
+    # audio.setnframes(nframes)
+    # audio.writeframes(file.read())
+    # audio.close()
+
+    # clip = moviepy.VideoFileClip(os.path.abspath(f'audios/{file.filename}'))
+    # clip.audio.write_audiofile(os.path.abspath(f'audios/recording.wav'))
+
+    # sampleRate = 44100.0  # hertz
+    # duration = 1.0  # seconds
+    # frequency = 440.0  # hertz
+    # obj = wave.open(os.path.abspath(f'audios/{file.filename}'), 'w')
+    # obj.setnchannels(1)  # mono
+    # obj.setsampwidth(2)
+    # obj.setframerate(sampleRate)
+    # for f in file.stream:
+    #     obj.writeframesraw(f)
+    # obj.close()
+
+    # files = request.files
+    # file = files.get('file')
+    # print(file)
+    # wa = wavio.read(os.path.abspath(f'audios/recording.wav'))
+    # wavio.write(os.path.abspath(f'audios/recording.wav'),
+    #             file.read(), wa.rate, sampwidth=wa.sampwidth)
+    # data, samplerate = soundfile.read(os.path.abspath(
+    #     f'audios/recording.wav'))
+    # soundfile.write(os.path.abspath(
+    #     f'audios/recording.wav'), data, samplerate)
+    # with open(os.path.abspath(f'audios/recording.wav'), 'wb') as f:
+    #     f.write(file.read())
+
+    # file.save(os.path.abspath(f'audios/recording.wav'))
+    with sr.WavFile(os.path.abspath(f'audios/recording.wav')) as source:
+        audio_text = r.listen(source)
+
+    try:
+        # using google speech recognition
+        text = r.recognize_google(audio_text)
+        print('Converting audio transcripts into text ...')
+        print(text)
+    except:
+        print('Sorry.. run again...')
+
+    response = jsonify("File received and saved!")
+    response.headers.add('Access-Control-Allow-Origin', '*')
+
+    return response
 
 
 @app.route('/register', methods=['POST'])

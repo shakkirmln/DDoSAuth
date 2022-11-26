@@ -3,8 +3,11 @@ import "./css/main.css";
 import "./css/util.css";
 import "./login.css";
 import { Home } from "./home.js";
+import AudioRecorder from "./audiorecorder.js";
 import Sketch from "react-p5";
 import axios from "axios";
+
+var randomWords = require("random-words");
 
 let video;
 
@@ -14,7 +17,19 @@ export class Login extends Component {
     this.state = {
       verify: false,
       idenity: " ",
+      captcha: randomWords(),
     };
+  }
+
+  componentDidMount() {
+    this.interval = setInterval(
+      () => this.setState({ captcha: randomWords() }),
+      30000
+    );
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.interval);
   }
 
   setup(p5 = "", canvasParentRef = "") {
@@ -33,6 +48,17 @@ export class Login extends Component {
     this.stop();
     this.props.backhome();
   }
+
+  // captcha() {
+  //   let length = Math.floor(Math.random() * 10 + 1);
+  //   const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
+  //   const charactersLength = characters.length;
+  //   let result = " ";
+  //   for (let i = 0; i < length; i++) {
+  //     result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  //   }
+  //   return result;
+  // }
 
   setup2 = async () => {
     video.loadPixels();
@@ -83,6 +109,11 @@ export class Login extends Component {
               <br />
 
               <Sketch setup={this.setup} draw={this.draw} />
+              <marquee behavior="scroll" direction="left">
+                {this.state.captcha}
+              </marquee>
+
+              <AudioRecorder />
 
               <div className="container-login100-form-btn m-t-17">
                 <button
