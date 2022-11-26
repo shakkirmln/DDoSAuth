@@ -23,14 +23,31 @@ export class Login extends Component {
   }
 
   componentDidMount() {
-    this.interval = setInterval(
-      () => this.setState({ captcha: randomWords() }),
-      30000
-    );
+    this.writeText();
+    this.interval = setInterval(() => {
+      this.setState({ captcha: randomWords() });
+    }, 10000);
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (prevState.captcha !== this.state.captcha) {
+      this.writeText();
+    }
   }
 
   componentWillUnmount() {
     clearInterval(this.interval);
+  }
+
+  writeText() {
+    const canvas = document.getElementById("tx1");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = "30px Arial";
+      ctx.fillStyle = "black";
+      ctx.fillText(this.state.captcha, 30, 50);
+    }
   }
 
   videoDisplay(p5 = "", canvasParentRef = "") {
@@ -120,7 +137,9 @@ export class Login extends Component {
               <br />
 
               <Sketch setup={this.videoDisplay} draw={this.draw} />
-              <p className="moving-text">{this.state.captcha}</p>
+              <div className="moving-text">
+                <canvas id="tx1"></canvas>
+              </div>
 
               <AudioRecorder speechVerify={this.speechVerify} />
 

@@ -30,22 +30,21 @@ export default class AudioRecorder extends Component {
       status,
       audioSrc,
       timeslice: 1000,
-      startCallback: (e) => {
-        console.log("succ start", e);
-      },
-      pauseCallback: (e) => {
-        console.log("succ pause", e);
-      },
+      // startCallback: (e) => {
+      //   console.log("succ start", e);
+      // },
+      // pauseCallback: (e) => {
+      //   console.log("succ pause", e);
+      // },
+      // onRecordCallback: (e) => {
+      //   console.log("recording", e);
+      // },
       stopCallback: async (e) => {
         this.setState({
           audioSrc: window.URL.createObjectURL(e),
         });
-        console.log("succ stop", e);
 
         this.speechVerify(e);
-      },
-      onRecordCallback: (e) => {
-        console.log("recording", e);
       },
       errorCallback: (err) => {
         console.log("error", err);

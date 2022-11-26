@@ -95,7 +95,7 @@ def captcha():
     except:
         print('Sorry.. run again...')
         return jsonify("Sorry, read the word again!")
-    if text == captcha:
+    if text.lower() == captcha.lower():
         return jsonify("Speech Verified!")
     else:
         return jsonify(f'Your word "{text}" does not match the word "{captcha}"')
