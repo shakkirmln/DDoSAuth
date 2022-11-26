@@ -1,5 +1,4 @@
 import React, { Component } from "react";
-import axios from "axios";
 import AudioAnalyser from "react-audio-analyser";
 import "./audiorecorder.css";
 
@@ -9,6 +8,7 @@ export default class AudioRecorder extends Component {
     this.state = {
       status: "",
     };
+    this.speechVerify = props.speechVerify;
   }
 
   controlAudio(status) {
@@ -41,11 +41,8 @@ export default class AudioRecorder extends Component {
           audioSrc: window.URL.createObjectURL(e),
         });
         console.log("succ stop", e);
-        const formData = new FormData();
-        formData.append("audio_file", e, "recording.wav");
-        await axios.post("http://localhost:5000/captcha", formData, {
-          "content-type": "multipart/form-data",
-        });
+
+        this.speechVerify(e);
       },
       onRecordCallback: (e) => {
         console.log("recording", e);

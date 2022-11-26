@@ -18,6 +18,7 @@ export class Login extends Component {
       verify: false,
       idenity: " ",
       captcha: randomWords(),
+      captchaVerify: false,
     };
   }
 
@@ -32,7 +33,7 @@ export class Login extends Component {
     clearInterval(this.interval);
   }
 
-  setup(p5 = "", canvasParentRef = "") {
+  videoDisplay(p5 = "", canvasParentRef = "") {
     p5.noCanvas();
     video = p5.createCapture(p5.VIDEO);
   }
@@ -49,18 +50,28 @@ export class Login extends Component {
     this.props.backhome();
   }
 
-  // captcha() {
-  //   let length = Math.floor(Math.random() * 10 + 1);
-  //   const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
-  //   const charactersLength = characters.length;
-  //   let result = " ";
-  //   for (let i = 0; i < length; i++) {
-  //     result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  //   }
-  //   return result;
-  // }
+  speechVerify = async (audioBlob) => {
+    const formData = new FormData();
+    formData.append("audio_file", audioBlob, "recording.wav");
+    formData.append("captcha", this.state.captcha);
+    const response = await axios.post(
+      "http://localhost:5000/captcha",
+      formData,
+      {
+        "content-type": "multipart/form-data",
+      }
+    );
+    alert(response.data);
+    if (response.data === "Speech Verified!") {
+      this.setState({ captchaVerify: true });
+    }
+  };
 
-  setup2 = async () => {
+  login = async () => {
+    if (this.state.captchaVerify === false) {
+      alert("Please verify the captcha!");
+      return;
+    }
     video.loadPixels();
     const image64 = video.canvas.toDataURL();
     const response = await axios.post("http://localhost:5000/verify", {
@@ -108,15 +119,15 @@ export class Login extends Component {
               <br />
               <br />
 
-              <Sketch setup={this.setup} draw={this.draw} />
+              <Sketch setup={this.videoDisplay} draw={this.draw} />
               <p className="moving-text">{this.state.captcha}</p>
 
-              <AudioRecorder />
+              <AudioRecorder speechVerify={this.speechVerify} />
 
               <div className="container-login100-form-btn m-t-17">
                 <button
                   id="submit"
-                  onClick={this.setup2.bind(this)}
+                  onClick={this.login.bind(this)}
                   className="login100-form-btn"
                 >
                   Sign In

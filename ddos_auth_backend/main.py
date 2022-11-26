@@ -12,7 +12,6 @@ from flask import Flask, request
 import os
 import tensorflow.compat.v1 as tf
 import speech_recognition as sr
-import moviepy.editor as moviepy
 tf.disable_v2_behavior()
 
 graph = tf.get_default_graph()
@@ -80,57 +79,11 @@ def verify(image_path, identity, database, model):
 
 @app.route('/captcha', methods=['POST'])
 def captcha():
-    # blob = request.data
     file = request.files['audio_file']
-    print(file.content_type)
+    captcha = request.form['captcha']
+
     file.save(os.path.abspath(f'audios/recording.wav'))
 
-    # with open(os.path.abspath(f'audios/recording.wav'), 'ab') as f:
-    #     f.write(blob)
-
-    # sample_audio = wave.open(f'audios/recording.wav', 'rb')
-    # nchannels = sample_audio.getnchannels()
-    # sampwidth = sample_audio.getsampwidth()
-    # framerate = sample_audio.getframerate()
-    # nframes = sample_audio.getnframes()
-    # sample_audio.close()
-
-    # audio = wave.open(f'audios/recording1.wav', 'wb')
-    # audio.setnchannels(1)
-    # audio.setsampwidth(2)
-    # audio.setframerate(framerate)
-    # audio.setnframes(nframes)
-    # audio.writeframes(file.read())
-    # audio.close()
-
-    # clip = moviepy.VideoFileClip(os.path.abspath(f'audios/{file.filename}'))
-    # clip.audio.write_audiofile(os.path.abspath(f'audios/recording.wav'))
-
-    # sampleRate = 44100.0  # hertz
-    # duration = 1.0  # seconds
-    # frequency = 440.0  # hertz
-    # obj = wave.open(os.path.abspath(f'audios/{file.filename}'), 'w')
-    # obj.setnchannels(1)  # mono
-    # obj.setsampwidth(2)
-    # obj.setframerate(sampleRate)
-    # for f in file.stream:
-    #     obj.writeframesraw(f)
-    # obj.close()
-
-    # files = request.files
-    # file = files.get('file')
-    # print(file)
-    # wa = wavio.read(os.path.abspath(f'audios/recording.wav'))
-    # wavio.write(os.path.abspath(f'audios/recording.wav'),
-    #             file.read(), wa.rate, sampwidth=wa.sampwidth)
-    # data, samplerate = soundfile.read(os.path.abspath(
-    #     f'audios/recording.wav'))
-    # soundfile.write(os.path.abspath(
-    #     f'audios/recording.wav'), data, samplerate)
-    # with open(os.path.abspath(f'audios/recording.wav'), 'wb') as f:
-    #     f.write(file.read())
-
-    # file.save(os.path.abspath(f'audios/recording.wav'))
     with sr.WavFile(os.path.abspath(f'audios/recording.wav')) as source:
         audio_text = r.listen(source)
 
@@ -141,11 +94,11 @@ def captcha():
         print(text)
     except:
         print('Sorry.. run again...')
-
-    response = jsonify("File received and saved!")
-    response.headers.add('Access-Control-Allow-Origin', '*')
-
-    return response
+        return jsonify("Sorry, read the word again!")
+    if text == captcha:
+        return jsonify("Speech Verified!")
+    else:
+        return jsonify(f'Your word "{text}" does not match the word "{captcha}"')
 
 
 @app.route('/register', methods=['POST'])
