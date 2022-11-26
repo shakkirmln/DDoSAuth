@@ -17,7 +17,9 @@ export class App extends Component {
     this.backhome = this.backhome.bind(this);
   }
 
-  componentWillMount() {
+  componentDidMount() {}
+
+  componentWillUnmount() {
     // define increment counter part
     const reqCnt = localStorage.getItem("reqCnt");
     const startTimestamp = localStorage.getItem("startTimestamp");

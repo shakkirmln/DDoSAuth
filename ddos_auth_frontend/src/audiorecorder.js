@@ -62,16 +62,13 @@ export default class AudioRecorder extends Component {
               className="btn"
               onClick={() => this.controlAudio("recording")}
             >
-              Start
-            </button>
-            <button className="btn" onClick={() => this.controlAudio("paused")}>
-              Pause
+              &#9658;
             </button>
             <button
               className="btn"
               onClick={() => this.controlAudio("inactive")}
             >
-              Stop
+              Validate
             </button>
           </div>
         </AudioAnalyser>

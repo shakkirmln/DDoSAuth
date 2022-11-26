@@ -109,9 +109,7 @@ export class Login extends Component {
               <br />
 
               <Sketch setup={this.setup} draw={this.draw} />
-              <marquee behavior="scroll" direction="left">
-                {this.state.captcha}
-              </marquee>
+              <p className="moving-text">{this.state.captcha}</p>
 
               <AudioRecorder />
 
