@@ -63,20 +63,6 @@ def img_to_encoding(path, model):
 database = {}
 
 
-def verify(image_path, identity, database, model):
-
-    encoding = img_to_encoding(image_path, model)
-    dist = np.linalg.norm(encoding-database[identity])
-    print(dist)
-    if dist < 5:
-        print("It's " + str(identity) + ", welcome in!")
-        match = True
-    else:
-        print("It's not " + str(identity) + ", please go away")
-        match = False
-    return dist, match
-
-
 @app.route('/captcha', methods=['POST'])
 def captcha():
     file = request.files['audio_file']
@@ -147,8 +133,8 @@ def who_is_it(image_path, database, model):
     return min_dist, identity
 
 
-@app.route('/verify', methods=['POST'])
-def change():
+@app.route('/login', methods=['POST'])
+def login():
     img_data = request.get_json()['image64']
     img_name = str(int(datetime.timestamp(datetime.now())))
     with open('images/'+img_name+'.jpg', "wb") as fh:

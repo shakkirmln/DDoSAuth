@@ -91,7 +91,7 @@ export class Login extends Component {
     }
     video.loadPixels();
     const image64 = video.canvas.toDataURL();
-    const response = await axios.post("http://localhost:5000/verify", {
+    const response = await axios.post("http://localhost:5000/login", {
       image64: image64,
     });
     console.log(response.data.identity);
