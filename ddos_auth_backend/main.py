@@ -1,15 +1,19 @@
-# Import all the necessary files!
 from tensorflow.compat.v1.keras import layers, Model
 from tensorflow.compat.v1.keras.backend import set_session
+from flask import Flask, Response, request, jsonify
+from flask_cors import CORS
 from datetime import datetime
 import base64
-from flask_cors import CORS
-from flask import jsonify
 import numpy as np
 import json
+import pickle
 import cv2
-from flask import Flask, request
+import imutils
+from imutils import face_utils
+import dlib
+import threading
 import os
+from scipy.spatial import distance as dist
 import tensorflow.compat.v1 as tf
 import speech_recognition as sr
 tf.disable_v2_behavior()
@@ -21,21 +25,265 @@ CORS(app)
 sess = tf.Session()
 set_session(sess)
 
-model = tf.keras.models.load_model('facenet_keras.h5')
-face_model = cv2.dnn.readNetFromCaffe('deploy.prototxt', 'weights.caffemodel')
-r = sr.Recognizer()
+LIP_MOVEMENT = False
+LIPS_APART = False
 
-# model.summary()
+# eye aspect ratio to detect blink
+EYE_AR_THRESH = 0.3
+# number of consecutive frames the eye must be below the threshold
+EYE_AR_CONSEC_FRAMES = 3
+
+BLINK_COUNTER = 0
+BLINK_TOTAL = 0
+
+# extacting eyes and mouth coordinates
+(leftEyeStart, leftEyeEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
+(rightEyeStart, rightEyeEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
+(mouthStart, mouthEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
+
+# initialize a lock used to ensure thread-safe
+# exchanges of the frames (useful for multiple browsers/tabs
+# are viewing the stream)
+lock = threading.Lock()
+
+face_detection_model = cv2.dnn.readNetFromCaffe(
+    'models/face_detector/deploy.prototxt', 'models/face_detector/res10_300x300_ssd_iter_140000.caffemodel')
+face_authentication_model = tf.keras.models.load_model(
+    'models/face_authenticity_detector/face_authenticity.model')
+face_landmark_model = dlib.shape_predictor(
+    'models/face_landmark_detector/shape_predictor_68_face_landmarks.dat')
+face_identification_model = tf.keras.models.load_model(
+    'models/face_identifier/facenet_keras.h5')
+speech_recognizer_model = sr.Recognizer()
+
+face_authentication_label_encoder = pickle.loads(
+    open('models/face_authenticity_detector/label_encoder.pickle', 'rb').read())
+
+database = {}
 
 
-def img_to_encoding(path, model):
+def generate_video_frame():
+    # grab global references to the lock variable
+    global lock
+    # initialize the video stream
+    vc = cv2.VideoCapture(0)
+
+    # check camera is open
+    if vc.isOpened():
+        rval, frame = vc.read()
+    else:
+        rval = False
+
+    # while streaming
+    while rval:
+        # wait until the lock is acquired
+        with lock:
+            # read next frame
+            rval, frame = vc.read()
+            # if blank frame
+            if frame is None:
+                continue
+
+            frame = imutils.resize(frame, width=800)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            (h, w) = frame.shape[:2]
+            blob = cv2.dnn.blobFromImage(cv2.resize(
+                frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
+
+            face_detection_model.setInput(blob)
+            detections = face_detection_model.forward()
+
+            for i in range(0, detections.shape[2]):
+                # extract the confidence (i.e. probability) associated with the prediction
+                confidence = detections[0, 0, i, 2]
+
+                # filter out weak detections
+                if confidence > 0.5:
+                    # compute the (x,y) coordinates of the bounding box
+                    # for the face and extract the face ROI
+                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                    (startX, startY, endX, endY) = box.astype('int')
+
+                    dlibRect = dlib.rectangle(startX, startY, endX, endY)
+
+                    # expand the bounding box a bit
+                    # (from experiment, the model works better this way)
+                    # and ensure that the bounding box does not fall outside of the frame
+                    startX = max(0, startX-20)
+                    startY = max(0, startY-20)
+                    endX = min(w, endX+20)
+                    endY = min(h, endY+20)
+
+                    # extract the face ROI
+                    face = frame[startY:endY, startX:endX]
+
+                    # detect facial landmarks
+                    shape = face_landmark_model(gray, dlibRect)
+
+                    global sess
+                    global graph
+                    with graph.as_default():
+                        set_session(sess)
+                        (authenticity_label,
+                         prediction) = face_authenticity_detection(face)
+
+                    if authenticity_label == 'No face detected':
+                        break
+
+                    if authenticity_label == 'real':
+                        lip_movement_detection(shape, frame)
+                        blink_detection(shape, frame)
+
+                    visualize_labels(frame, authenticity_label,
+                                     prediction, startX, startY, endX, endY)
+
+            # encode the frame in JPEG format
+            (flag, encodedImage) = cv2.imencode(".jpg", frame)
+
+            # ensure the frame was successfully encoded
+            if not flag:
+                continue
+
+        # yield the output frame in the byte format
+        yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encodedImage) + b'\r\n')
+    # release the camera
+    vc.release()
+
+
+def lip_movement_detection(shape, frame):
+    global LIP_MOVEMENT, LIPS_APART
+    # extract lip coordinates
+    outer_top_lip_x = shape.part(51).x
+    outer_top_lip_y = shape.part(51).y
+    outer_bottom_lip_x = shape.part(57).x
+    outer_bottom_lip_y = shape.part(57).y
+
+    shape = face_utils.shape_to_np(shape)
+
+    m_dist = dist.euclidean(
+        (outer_top_lip_x, outer_top_lip_y), (outer_bottom_lip_x, outer_bottom_lip_y))
+    if(m_dist > 30):
+        LIPS_APART = True
+    else:
+        if(LIPS_APART):
+            LIP_MOVEMENT = True
+            LIPS_APART = False
+        else:
+            LIP_MOVEMENT = False
+
+    # visualize mouth position
+    mouth = shape[mouthStart:mouthEnd]
+    mouthHull = cv2.convexHull(mouth)
+    cv2.drawContours(frame, [mouthHull], -1, (0, 255, 0), 1)
+
+
+def blink_detection(shape, frame):
+    global BLINK_COUNTER, BLINK_TOTAL
+    shape = face_utils.shape_to_np(shape)
+
+    # extract the left and right eye coordinate
+    leftEye = shape[leftEyeStart:leftEyeEnd]
+    rightEye = shape[rightEyeStart:rightEyeEnd]
+
+    # compute the eye aspect ratio for both eyes
+    leftEAR = eye_aspect_ratio(leftEye)
+    rightEAR = eye_aspect_ratio(rightEye)
+
+    # average the eye aspect ratio together for both eyes
+    ear = (leftEAR + rightEAR) / 2.0
+
+    # check to see if the eye aspect ratio is below the blink
+    # threshold, and if so, increment the blink frame counter
+    if ear < EYE_AR_THRESH:
+        BLINK_COUNTER += 1
+
+    # otherwise, the eye aspect ratio is not below the blink
+    # threshold
+    else:
+        # if the eyes were closed for a sufficient number of
+        # then increment the total number of blinks
+        if BLINK_COUNTER >= EYE_AR_CONSEC_FRAMES:
+            BLINK_TOTAL += 1
+
+        # reset the eye frame counter
+        BLINK_COUNTER = 0
+
+    # visualize eye position
+    leftEyeHull = cv2.convexHull(leftEye)
+    rightEyeHull = cv2.convexHull(rightEye)
+    cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
+    cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
+
+
+def face_authenticity_detection(face):
+    try:
+        face = cv2.resize(face, (32, 32))
+    except:
+        return ("No face detected", 0)
+    face = face.astype('float') / 255.0
+    face = tf.keras.preprocessing.image.img_to_array(face)
+
+    # tf model require batch of data to feed in
+    # so if we need only one image at a time, we have to add one more dimension
+    # in this case it's the same with [face]
+    face = np.expand_dims(face, axis=0)
+
+    # pass the face ROI through the trained liveness detection model
+    # to determine if the face is 'real' or 'fake'
+    # predict return 2 value for each example (because in the model we have 2 output classes)
+    # the first value stores the prob of being real, the second value stores the prob of being fake
+    # so argmax will pick the one with highest prob
+    # we care only first output (since we have only 1 input)
+    preds = face_authentication_model.predict(face)[0]
+    j = np.argmax(preds)
+    label_name = face_authentication_label_encoder.classes_[j]
+
+    return (label_name, preds[j])
+
+
+def visualize_labels(frame, authenticity_label, prediction, startX, startY, endX, endY):
+    if authenticity_label == 'real':
+        top_label = f'{authenticity_label}: {prediction:.4f} Blinks: {BLINK_TOTAL}'
+        bottom_label = f'Lip Movement: {LIP_MOVEMENT}'
+    else:
+        top_label = f'{authenticity_label}: {prediction:.4f}'
+        bottom_label = ''
+
+    # draw the label and bounding box on the frame
+    cv2.putText(frame, top_label, (startX, startY - 10),
+                cv2.FONT_HERSHEY_COMPLEX, 0.7, (0, 0, 255), 2)
+    cv2.putText(frame, bottom_label, (startX, endY + 25),
+                cv2.FONT_HERSHEY_COMPLEX, 0.7, (0, 0, 255), 2)
+    cv2.rectangle(frame, (startX, startY),
+                  (endX, endY), (0, 0, 255), 4)
+
+
+def eye_aspect_ratio(eye):
+    # compute the euclidean distances between the two sets of
+    # vertical eye landmarks (x, y)-coordinates
+    A = dist.euclidean(eye[1], eye[5])
+    B = dist.euclidean(eye[2], eye[4])
+
+    # compute the euclidean distance between the horizontal
+    # eye landmark (x, y)-coordinates
+    C = dist.euclidean(eye[0], eye[3])
+
+    # compute the eye aspect ratio
+    ear = (A + B) / (2.0 * C)
+
+    # return the eye aspect ratio
+    return ear
+
+
+def img_to_encoding(path):
     img1 = cv2.imread(path, 1)
     # Face extraction
     (h, w) = img1.shape[:2]
     blob = cv2.dnn.blobFromImage(cv2.resize(
         img1, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-    face_model.setInput(blob)
-    detections = face_model.forward()
+    face_detection_model.setInput(blob)
+    detections = face_detection_model.forward()
     count = 0
     for i in range(0, detections.shape[2]):
         box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
@@ -55,12 +303,43 @@ def img_to_encoding(path, model):
         img = cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
     x_train = np.array([img])
     print(x_train)
-    embedding = model.predict(x_train)
+    embedding = face_identification_model.predict(x_train)
     print("embedding", embedding)
     return embedding
 
 
-database = {}
+def identify_face(image_path):
+    print(image_path)
+    encoding = img_to_encoding(image_path)
+    if len(encoding) == 0:
+        return -1, -1
+    min_dist = 1000
+    identity = None
+    if len(database) == 0:
+        print("No one is registered in the database!")
+    else:
+        # Loop over the database dictionary's names and encodings.
+        for (name, db_enc) in database.items():
+            dist = np.linalg.norm(encoding-db_enc)
+            print(dist)
+            if dist < min_dist:
+                min_dist = dist
+                identity = name
+        if min_dist > 5:
+            print("Not in the database.")
+        else:
+            print("it's " + str(identity) + ", the distance is " + str(min_dist))
+    return min_dist, identity
+
+
+@app.route('/video_feed', methods=['GET'])
+def stream():
+    global LIP_MOVEMENT, LIPS_APART, BLINK_COUNTER, BLINK_TOTAL
+    LIP_MOVEMENT = False
+    LIPS_APART = False
+    BLINK_COUNTER = 0
+    BLINK_TOTAL = 0
+    return Response(generate_video_frame(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.route('/captcha', methods=['POST'])
@@ -71,11 +350,11 @@ def captcha():
     file.save(os.path.abspath(f'audios/recording.wav'))
 
     with sr.WavFile(os.path.abspath(f'audios/recording.wav')) as source:
-        audio_text = r.listen(source)
+        audio_text = speech_recognizer_model.listen(source)
 
     try:
         # using google speech recognition
-        text = r.recognize_google(audio_text)
+        text = speech_recognizer_model.recognize_google(audio_text)
         print('Converting audio transcripts into text ...')
         print(text)
     except:
@@ -100,37 +379,13 @@ def register():
         global graph
         with graph.as_default():
             set_session(sess)
-            encoding = img_to_encoding(path, model)
+            encoding = img_to_encoding(path)
             if len(encoding) == 0:
                 return json.dumps({"status": 500, "msg": "Either no face detected or more than one face detected!"})
             database[username] = encoding
         return json.dumps({"status": 200})
     except:
         return json.dumps({"status": 500})
-
-
-def who_is_it(image_path, database, model):
-    print(image_path)
-    encoding = img_to_encoding(image_path, model)
-    if len(encoding) == 0:
-        return -1, -1
-    min_dist = 1000
-    identity = None
-    if len(database) == 0:
-        print("No one is registered in the database!")
-    else:
-        # Loop over the database dictionary's names and encodings.
-        for (name, db_enc) in database.items():
-            dist = np.linalg.norm(encoding-db_enc)
-            print(dist)
-            if dist < min_dist:
-                min_dist = dist
-                identity = name
-        if min_dist > 5:
-            print("Not in the database.")
-        else:
-            print("it's " + str(identity) + ", the distance is " + str(min_dist))
-    return min_dist, identity
 
 
 @app.route('/login', methods=['POST'])
@@ -144,7 +399,7 @@ def login():
     global graph
     with graph.as_default():
         set_session(sess)
-        min_dist, identity = who_is_it(path, database, model)
+        min_dist, identity = identify_face(path)
     os.remove(path)
     if min_dist == -1 and identity == -1:
         return json.dumps({"msg": "Either no face detected or more than one face detected"})

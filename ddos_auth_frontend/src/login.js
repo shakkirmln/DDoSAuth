@@ -63,7 +63,7 @@ export class Login extends Component {
   }
 
   logout() {
-    this.stop();
+    // this.stop();
     this.props.backhome();
   }
 
@@ -117,10 +117,12 @@ export class Login extends Component {
       <div>
         <div className="limiter">
           <div className="container-login100">
-            <div className="wrap-login100 p-l-110 p-r-110 p-t-62 p-b-33">
-              <span className="login100-form-title p-b-53">Sign In With</span>
+            <div className="wrap-login100 p-l-110 p-r-110 p-t-10 p-b-33">
+              <span className="login100-form-title m-l-20 p-b-10">
+                Sign In With
+              </span>
 
-              <input />
+              {/* <input />
               <br />
               <br />
               <br />
@@ -134,9 +136,14 @@ export class Login extends Component {
               <br />
               <br />
               <br />
-              <br />
+              <br /> */}
 
-              <Sketch setup={this.videoDisplay} draw={this.draw} />
+              {/* <Sketch setup={this.videoDisplay} draw={this.draw} /> */}
+              <img
+                className="live_video"
+                src="http://localhost:5000/video_feed"
+                alt="Sorry, error in the video feed"
+              />
               <div className="moving-text">
                 <canvas id="tx1"></canvas>
               </div>

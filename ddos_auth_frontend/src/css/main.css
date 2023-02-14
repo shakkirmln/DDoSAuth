@@ -174,7 +174,6 @@ iframe {
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  padding: 15px;
   background-image: url('../images/bg-01.jpg');
   background-position: center;
   background-size: cover;
@@ -298,7 +297,7 @@ iframe {
 [ Input ]*/
 
 .wrap-input100 {
-  width: 100%;
+  width: 540px;
   position: relative;
   background-color: #f7f7f7;
   border: 1px solid #e6e6e6;
@@ -374,7 +373,7 @@ iframe {
 /*------------------------------------------------------------------
 [ Button ]*/
 .container-login100-form-btn {
-  width: 100%;
+  width: 540px;
   display: -webkit-box;
   display: -webkit-flex;
   display: -moz-box;

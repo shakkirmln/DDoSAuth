@@ -8,7 +8,7 @@ export class Home extends Component {
           <div className="container-login100">
             <div className="login100-form-title ">Welcome to our project</div>
             <div className="login100-form-title ">
-              Enhanced Layer of Protection again DDoS
+              Enhanced Layer of Protection against DDoS
             </div>
             <div>
               One of the major cybercrime is DDoS attack. DDoS attack is a type

@@ -15,6 +15,12 @@ video{
 	height: 440px
 }
 
+.live_video{
+
+	width: 540px;
+	height: 440px
+}
+
 .microphone {
   display: flex;
   align-items: center;

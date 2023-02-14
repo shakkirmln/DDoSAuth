@@ -40,7 +40,7 @@ export class Register extends Component {
       username: mood,
     });
     if (response.data.status === 200) {
-      this.stop();
+      // this.stop();
       alert("Registered!");
     } else {
       if (response.data.msg) {
@@ -52,7 +52,7 @@ export class Register extends Component {
     this.props.backhome();
   };
   logout() {
-    this.stop();
+    // this.stop();
     this.props.backhome();
   }
 
@@ -61,13 +61,15 @@ export class Register extends Component {
       <div>
         <div className="limiter">
           <div className="container-login100">
-            <div className="wrap-login100 p-l-110 p-r-110 p-t-62 p-b-33">
-              <span className="login100-form-title p-b-53">Sign Up With</span>
+            <div className="wrap-login100 p-l-110 p-r-110 p-t-10 p-b-33">
+              <span className="login100-form-title m-l-20 p-b-10">
+                Sign Up With
+              </span>
               <div className="p-t-31 p-b-9">
                 <span className="txt1">Username</span>
               </div>
               <div
-                className="wrap-input100 validate-input"
+                className="wrap-input100 validate-input m-b-16"
                 data-validate="Username is required"
               >
                 <input
@@ -78,6 +80,7 @@ export class Register extends Component {
                 />
                 <span className="focus-input100"></span>
               </div>
+              {/* <br />
               <br />
               <br />
               <br />
@@ -92,11 +95,14 @@ export class Register extends Component {
               <br />
               <br />
               <br />
-              <br />
-              <br />
+              <br /> */}
 
               {this.state.signup ? (
-                <Sketch id="s" setup={this.setup} draw={this.draw} />
+                <img
+                  className="live_video"
+                  src="http://localhost:5000/video_feed"
+                  alt="Sorry, error in the video feed"
+                />
               ) : (
                 ""
               )}
