@@ -4,7 +4,7 @@ import "./css/util.css";
 import "./login.css";
 import { Home } from "./home.js";
 import AudioRecorder from "./audiorecorder.js";
-import Sketch from "react-p5";
+// import Sketch from "react-p5";
 import axios from "axios";
 
 var randomWords = require("random-words");
@@ -89,20 +89,20 @@ export class Login extends Component {
       alert("Please verify the captcha!");
       return;
     }
-    video.loadPixels();
-    const image64 = video.canvas.toDataURL();
+    // video.loadPixels();
+    // const image64 = video.canvas.toDataURL();
     const response = await axios.post("http://localhost:5000/login", {
-      image64: image64,
+      // image64: image64,
     });
     console.log(response.data.identity);
     if (response.data.identity) {
-      this.stop();
+      // this.stop();
       this.setState({
         verify: true,
         idenity: response.data.identity,
       });
     } else {
-      this.stop();
+      // this.stop();
       if (response.data.msg) {
         alert(response.data.msg);
       } else {

@@ -1,21 +1,19 @@
-from tensorflow.compat.v1.keras import layers, Model
 from tensorflow.compat.v1.keras.backend import set_session
 from flask import Flask, Response, request, jsonify
-from flask_cors import CORS
-from datetime import datetime
-import base64
-import numpy as np
-import json
-import pickle
-import cv2
-import imutils
-from imutils import face_utils
-import dlib
-import threading
-import os
 from scipy.spatial import distance as dist
+from imutils import face_utils
+from flask_cors import CORS
 import tensorflow.compat.v1 as tf
 import speech_recognition as sr
+import numpy as np
+import threading
+import imutils
+import pickle
+import json
+import dlib
+import cv2
+import os
+
 tf.disable_v2_behavior()
 
 graph = tf.get_default_graph()
@@ -27,14 +25,16 @@ set_session(sess)
 
 LIP_MOVEMENT = False
 LIPS_APART = False
+BLINK_COUNTER = 0
+BLINK_TOTAL = 0
+FACE_COUNT = 0
+FAKE_FACE_COUNT = 0
 
 # eye aspect ratio to detect blink
 EYE_AR_THRESH = 0.3
 # number of consecutive frames the eye must be below the threshold
 EYE_AR_CONSEC_FRAMES = 3
 
-BLINK_COUNTER = 0
-BLINK_TOTAL = 0
 
 # extacting eyes and mouth coordinates
 (leftEyeStart, leftEyeEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
@@ -61,10 +61,17 @@ face_authentication_label_encoder = pickle.loads(
 
 database = {}
 
+extracted_face = None
+
 
 def generate_video_frame():
     # grab global references to the lock variable
     global lock
+    global sess
+    global graph
+    global FACE_COUNT
+    global FAKE_FACE_COUNT
+    global extracted_face
     # initialize the video stream
     vc = cv2.VideoCapture(0)
 
@@ -78,6 +85,8 @@ def generate_video_frame():
     while rval:
         # wait until the lock is acquired
         with lock:
+            face_count = 0
+            fake_face_count = 0
             # read next frame
             rval, frame = vc.read()
             # if blank frame
@@ -100,6 +109,7 @@ def generate_video_frame():
 
                 # filter out weak detections
                 if confidence > 0.5:
+                    face_count += 1
                     # compute the (x,y) coordinates of the bounding box
                     # for the face and extract the face ROI
                     box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
@@ -117,12 +127,10 @@ def generate_video_frame():
 
                     # extract the face ROI
                     face = frame[startY:endY, startX:endX]
-
+                    extracted_face = face
                     # detect facial landmarks
                     shape = face_landmark_model(gray, dlibRect)
 
-                    global sess
-                    global graph
                     with graph.as_default():
                         set_session(sess)
                         (authenticity_label,
@@ -134,9 +142,14 @@ def generate_video_frame():
                     if authenticity_label == 'real':
                         lip_movement_detection(shape, frame)
                         blink_detection(shape, frame)
+                    elif authenticity_label == 'fake':
+                        fake_face_count += 1
 
                     visualize_labels(frame, authenticity_label,
                                      prediction, startX, startY, endX, endY)
+
+            FACE_COUNT = face_count
+            FAKE_FACE_COUNT = fake_face_count
 
             # encode the frame in JPEG format
             (flag, encodedImage) = cv2.imencode(".jpg", frame)
@@ -149,6 +162,18 @@ def generate_video_frame():
         yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encodedImage) + b'\r\n')
     # release the camera
     vc.release()
+
+
+def face_identification_embedding(extracted_face):
+    extracted_face = extracted_face[..., ::-1]
+    dim = (160, 160)
+    # resize image
+    if(extracted_face.shape != (160, 160, 3)):
+        extracted_face = cv2.resize(
+            extracted_face, dim, interpolation=cv2.INTER_AREA)
+    face_data = np.array([extracted_face])
+    embedding = face_identification_model.predict(face_data)
+    return embedding
 
 
 def lip_movement_detection(shape, frame):
@@ -276,43 +301,7 @@ def eye_aspect_ratio(eye):
     return ear
 
 
-def img_to_encoding(path):
-    img1 = cv2.imread(path, 1)
-    # Face extraction
-    (h, w) = img1.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(
-        img1, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-    face_detection_model.setInput(blob)
-    detections = face_detection_model.forward()
-    count = 0
-    for i in range(0, detections.shape[2]):
-        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-        (startX, startY, endX, endY) = box.astype("int")
-        confidence = detections[0, 0, i, 2]
-        # If confidence > 0.5, face is detected
-        if (confidence > 0.5):
-            count += 1
-            frame = img1[startY:endY, startX:endX]
-            img1 = frame
-    if count == 0 or count > 1:
-        return []
-    img = img1[..., ::-1]
-    dim = (160, 160)
-    # resize image
-    if(img.shape != (160, 160, 3)):
-        img = cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
-    x_train = np.array([img])
-    print(x_train)
-    embedding = face_identification_model.predict(x_train)
-    print("embedding", embedding)
-    return embedding
-
-
-def identify_face(image_path):
-    print(image_path)
-    encoding = img_to_encoding(image_path)
-    if len(encoding) == 0:
-        return -1, -1
+def identify_face(face_embedding):
     min_dist = 1000
     identity = None
     if len(database) == 0:
@@ -320,16 +309,17 @@ def identify_face(image_path):
     else:
         # Loop over the database dictionary's names and encodings.
         for (name, db_enc) in database.items():
-            dist = np.linalg.norm(encoding-db_enc)
+            dist = np.linalg.norm(face_embedding-db_enc)
             print(dist)
             if dist < min_dist:
                 min_dist = dist
                 identity = name
         if min_dist > 5:
+            identity = ""
             print("Not in the database.")
         else:
             print("it's " + str(identity) + ", the distance is " + str(min_dist))
-    return min_dist, identity
+    return identity
 
 
 @app.route('/video_feed', methods=['GET'])
@@ -370,19 +360,17 @@ def captcha():
 def register():
     try:
         username = request.get_json()['username']
-        img_data = request.get_json()['image64']
-        with open('images/'+username+'.jpg', "wb") as fh:
-            fh.write(base64.b64decode(img_data[22:]))
-        path = 'images/'+username+'.jpg'
+        if FACE_COUNT == 0:
+            return json.dumps({"status": 500, "msg": "No face detected!"})
+        elif FACE_COUNT > 1:
+            return json.dumps({"status": 500, "msg": f"{FACE_COUNT} face detected! Out of which {FAKE_FACE_COUNT} are fake!"})
 
         global sess
         global graph
         with graph.as_default():
             set_session(sess)
-            encoding = img_to_encoding(path)
-            if len(encoding) == 0:
-                return json.dumps({"status": 500, "msg": "Either no face detected or more than one face detected!"})
-            database[username] = encoding
+            face_embedding = face_identification_embedding(extracted_face)
+            database[username] = face_embedding
         return json.dumps({"status": 200})
     except:
         return json.dumps({"status": 500})
@@ -390,22 +378,25 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    img_data = request.get_json()['image64']
-    img_name = str(int(datetime.timestamp(datetime.now())))
-    with open('images/'+img_name+'.jpg', "wb") as fh:
-        fh.write(base64.b64decode(img_data[22:]))
-    path = 'images/'+img_name+'.jpg'
-    global sess
-    global graph
-    with graph.as_default():
-        set_session(sess)
-        min_dist, identity = identify_face(path)
-    os.remove(path)
-    if min_dist == -1 and identity == -1:
-        return json.dumps({"msg": "Either no face detected or more than one face detected"})
-    if min_dist > 5:
-        return json.dumps({"identity": 0})
-    return json.dumps({"identity": str(identity)})
+    try:
+        if FACE_COUNT == 0:
+            return json.dumps({"status": 500, "msg": "No face detected!"})
+        elif FACE_COUNT > 1:
+            return json.dumps({"status": 500, "msg": f"{FACE_COUNT} face detected! Out of which {FAKE_FACE_COUNT} are fake!"})
+
+        global sess
+        global graph
+        with graph.as_default():
+            set_session(sess)
+            face_embedding = face_identification_embedding(extracted_face)
+            identity = identify_face(face_embedding)
+            if identity is None:
+                return json.dumps({"msg": "No one is registered in the database"})
+            elif identity == "":
+                return json.dumps({"msg": "Not in the database"})
+            return json.dumps({"identity": str(identity)})
+    except:
+        return json.dumps({"status": 500})
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import "./css/main.css";
 import "./css/util.css";
 import "./register.css";
-import Sketch from "react-p5";
+// import Sketch from "react-p5";
 import axios from "axios";
 let video;
 export class Register extends Component {
@@ -33,10 +33,10 @@ export class Register extends Component {
       alert("Please enter the username!");
       return;
     }
-    video.loadPixels();
-    const image64 = video.canvas.toDataURL();
+    // video.loadPixels();
+    // const image64 = video.canvas.toDataURL();
     const response = await axios.post("http://localhost:5000/register", {
-      image64: image64,
+      // image64: image64,
       username: mood,
     });
     if (response.data.status === 200) {
