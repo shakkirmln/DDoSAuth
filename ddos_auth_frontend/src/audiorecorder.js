@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import axios from "axios";
 import AudioAnalyser from "react-audio-analyser";
 import "./audiorecorder.css";
 
@@ -11,11 +12,23 @@ export default class AudioRecorder extends Component {
     this.speechVerify = props.speechVerify;
   }
 
-  controlAudio(status) {
+  controlAudio = async (status) => {
     this.setState({
       status,
     });
-  }
+    if (status === "recording") {
+      const response = await axios.get(
+        "http://localhost:5000/start_audio_stream"
+      );
+      console.log(response.data);
+    }
+    if (status === "inactive") {
+      const response = await axios.get(
+        "http://localhost:5000/close_audio_stream"
+      );
+      console.log(response.data);
+    }
+  };
 
   componentDidMount() {
     this.setState({

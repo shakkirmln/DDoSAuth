@@ -9,7 +9,7 @@ import axios from "axios";
 
 var randomWords = require("random-words");
 
-let video;
+// let video;
 
 export class Login extends Component {
   constructor(props) {
@@ -19,6 +19,7 @@ export class Login extends Component {
       idenity: " ",
       captcha: randomWords(),
       captchaVerify: false,
+      blinkCount: Math.floor(Math.random() * 10) + 1,
     };
   }
 
@@ -50,22 +51,30 @@ export class Login extends Component {
     }
   }
 
-  videoDisplay(p5 = "", canvasParentRef = "") {
-    p5.noCanvas();
-    video = p5.createCapture(p5.VIDEO);
-  }
+  // videoDisplay(p5 = "", canvasParentRef = "") {
+  //   p5.noCanvas();
+  //   video = p5.createCapture(p5.VIDEO);
+  // }
 
-  stop() {
-    const tracks = document.querySelector("video").srcObject.getTracks();
-    tracks.forEach(function (track) {
-      track.stop();
-    });
-  }
+  // stop() {
+  //   const tracks = document.querySelector("video").srcObject.getTracks();
+  //   tracks.forEach(function (track) {
+  //     track.stop();
+  //   });
+  // }
 
-  logout() {
+  logout = async () => {
     // this.stop();
+    const response = await axios.get("http://localhost:5000/close_video_feed");
+    console.log(response.data);
     this.props.backhome();
-  }
+  };
+
+  blink = async () => {
+    // this.stop();
+    const response = await axios.get("http://localhost:5000/stop_blink_count");
+    console.log(response.data);
+  };
 
   speechVerify = async (audioBlob) => {
     const formData = new FormData();
@@ -93,6 +102,7 @@ export class Login extends Component {
     // const image64 = video.canvas.toDataURL();
     const response = await axios.post("http://localhost:5000/login", {
       // image64: image64,
+      blinkCount: this.state.blinkCount,
     });
     console.log(response.data.identity);
     if (response.data.identity) {
@@ -121,7 +131,15 @@ export class Login extends Component {
               <span className="login100-form-title m-l-20 p-b-10">
                 Sign In With
               </span>
-
+              <div>
+                Blink your eyes exactly {this.state.blinkCount} times to verify
+                (close your eyes for 1 seconds to avoid missing the blink)
+              </div>
+              <div className="btn-box">
+                <button className="btn" onClick={this.blink.bind(this)}>
+                  Stop Blink Counter
+                </button>
+              </div>
               {/* <input />
               <br />
               <br />

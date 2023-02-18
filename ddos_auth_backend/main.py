@@ -5,11 +5,13 @@ from imutils import face_utils
 from flask_cors import CORS
 import tensorflow.compat.v1 as tf
 import speech_recognition as sr
+import face_recognition
 import numpy as np
 import threading
 import imutils
 import pickle
 import json
+import math
 import dlib
 import cv2
 import os
@@ -23,8 +25,12 @@ CORS(app)
 sess = tf.Session()
 set_session(sess)
 
+STREAM_CLOSE = False
+AUDIO_STREAM_RUNNING = False
+BLINK_COUNT_STOP = False
+LIP_MOVEMENT_AUDIO_STREAM = False
+
 LIP_MOVEMENT = False
-LIPS_APART = False
 BLINK_COUNTER = 0
 BLINK_TOTAL = 0
 FACE_COUNT = 0
@@ -34,7 +40,6 @@ FAKE_FACE_COUNT = 0
 EYE_AR_THRESH = 0.3
 # number of consecutive frames the eye must be below the threshold
 EYE_AR_CONSEC_FRAMES = 3
-
 
 # extacting eyes and mouth coordinates
 (leftEyeStart, leftEyeEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
@@ -85,6 +90,8 @@ def generate_video_frame():
     while rval:
         # wait until the lock is acquired
         with lock:
+            if STREAM_CLOSE:
+                break
             face_count = 0
             fake_face_count = 0
             # read next frame
@@ -128,8 +135,6 @@ def generate_video_frame():
                     # extract the face ROI
                     face = frame[startY:endY, startX:endX]
                     extracted_face = face
-                    # detect facial landmarks
-                    shape = face_landmark_model(gray, dlibRect)
 
                     with graph.as_default():
                         set_session(sess)
@@ -140,8 +145,11 @@ def generate_video_frame():
                         break
 
                     if authenticity_label == 'real':
+                        # detect facial landmarks
+                        shape = face_landmark_model(gray, dlibRect)
                         lip_movement_detection(shape, frame)
-                        blink_detection(shape, frame)
+                        if not BLINK_COUNT_STOP:
+                            blink_detection(shape, frame)
                     elif authenticity_label == 'fake':
                         fake_face_count += 1
 
@@ -176,26 +184,45 @@ def face_identification_embedding(extracted_face):
     return embedding
 
 
-def lip_movement_detection(shape, frame):
-    global LIP_MOVEMENT, LIPS_APART
-    # extract lip coordinates
-    outer_top_lip_x = shape.part(51).x
-    outer_top_lip_y = shape.part(51).y
-    outer_bottom_lip_x = shape.part(57).x
-    outer_bottom_lip_y = shape.part(57).y
+def get_lip_height(lip):
+    sum = 0
+    for i in [2, 3, 4]:
+        # distance between two near points up and down
+        distance = math.sqrt((lip[i][0] - lip[12-i][0])**2 +
+                             (lip[i][1] - lip[12-i][1])**2)
+        sum += distance
+    return sum / 3
 
+
+def get_mouth_height(top_lip, bottom_lip):
+    sum = 0
+    for i in [8, 9, 10]:
+        # distance between two near points up and down
+        distance = math.sqrt((top_lip[i][0] - bottom_lip[18-i][0])**2 +
+                             (top_lip[i][1] - bottom_lip[18-i][1])**2)
+        sum += distance
+    return sum / 3
+
+
+def lip_movement_detection(shape, frame):
+    global LIP_MOVEMENT, LIP_MOVEMENT_AUDIO_STREAM
     shape = face_utils.shape_to_np(shape)
 
-    m_dist = dist.euclidean(
-        (outer_top_lip_x, outer_top_lip_y), (outer_bottom_lip_x, outer_bottom_lip_y))
-    if(m_dist > 30):
-        LIPS_APART = True
+    top_lip = [tuple(e) for e in shape[48:56]] + list(reversed([tuple(e)
+                                                                for e in shape[60:64]]))
+    bottom_lip = [tuple(e) for e in shape[54:62]] + list(reversed([tuple(e)
+                                                                   for e in shape[64:69]]))
+
+    top_lip_height = get_lip_height(top_lip)
+    bottom_lip_height = get_lip_height(bottom_lip)
+    mouth_height = get_mouth_height(top_lip, bottom_lip)
+
+    if mouth_height > min(top_lip_height, bottom_lip_height) * 0.25:
+        LIP_MOVEMENT = True
+        if AUDIO_STREAM_RUNNING:
+            LIP_MOVEMENT_AUDIO_STREAM = True
     else:
-        if(LIPS_APART):
-            LIP_MOVEMENT = True
-            LIPS_APART = False
-        else:
-            LIP_MOVEMENT = False
+        LIP_MOVEMENT = False
 
     # visualize mouth position
     mouth = shape[mouthStart:mouthEnd]
@@ -322,9 +349,41 @@ def identify_face(face_embedding):
     return identity
 
 
+@app.route('/stop_blink_count', methods=['GET'])
+def stop_blink_count():
+    global BLINK_COUNT_STOP
+    BLINK_COUNT_STOP = True
+    return Response("Blink count stopped", mimetype="text/plain")
+
+
+@app.route('/start_audio_stream', methods=['GET'])
+def start_audio_stream():
+    global AUDIO_STREAM_RUNNING, LIP_MOVEMENT_AUDIO_STREAM
+    LIP_MOVEMENT_AUDIO_STREAM = False
+    AUDIO_STREAM_RUNNING = True
+    return Response("Audio Stream started", mimetype="text/plain")
+
+
+@app.route('/close_audio_stream', methods=['GET'])
+def close_audio_stream():
+    global AUDIO_STREAM_RUNNING
+    AUDIO_STREAM_RUNNING = False
+    return Response("Audio Stream stopped", mimetype="text/plain")
+
+
+@app.route('/close_video_feed', methods=['GET'])
+def close_stream():
+    global STREAM_CLOSE, BLINK_COUNT_STOP
+    BLINK_COUNT_STOP = False
+    STREAM_CLOSE = True
+    return Response("Stream closed", mimetype="text/plain")
+
+
 @app.route('/video_feed', methods=['GET'])
 def stream():
-    global LIP_MOVEMENT, LIPS_APART, BLINK_COUNTER, BLINK_TOTAL
+    global LIP_MOVEMENT, LIPS_APART, BLINK_COUNTER, BLINK_TOTAL, STREAM_CLOSE, BLINK_COUNT_STOP
+    STREAM_CLOSE = False
+    BLINK_COUNT_STOP = False
     LIP_MOVEMENT = False
     LIPS_APART = False
     BLINK_COUNTER = 0
@@ -336,6 +395,9 @@ def stream():
 def captcha():
     file = request.files['audio_file']
     captcha = request.form['captcha']
+
+    if LIP_MOVEMENT_AUDIO_STREAM == False:
+        return jsonify("Lip movement not identified!")
 
     file.save(os.path.abspath(f'audios/recording.wav'))
 
@@ -358,12 +420,15 @@ def captcha():
 
 @app.route('/register', methods=['POST'])
 def register():
+    global BLINK_TOTAL, BLINK_COUNTER
     try:
         username = request.get_json()['username']
         if FACE_COUNT == 0:
             return json.dumps({"status": 500, "msg": "No face detected!"})
         elif FACE_COUNT > 1:
             return json.dumps({"status": 500, "msg": f"{FACE_COUNT} face detected! Out of which {FAKE_FACE_COUNT} are fake!"})
+        elif FACE_COUNT == 1 and FAKE_FACE_COUNT > 0:
+            return json.dumps({"status": 500, "msg": f"{FAKE_FACE_COUNT} fake face detected!"})
 
         global sess
         global graph
@@ -371,18 +436,31 @@ def register():
             set_session(sess)
             face_embedding = face_identification_embedding(extracted_face)
             database[username] = face_embedding
+        BLINK_TOTAL = 0
+        BLINK_COUNTER = 0
         return json.dumps({"status": 200})
     except:
+        BLINK_TOTAL = 0
+        BLINK_COUNTER = 0
         return json.dumps({"status": 500})
 
 
 @app.route('/login', methods=['POST'])
 def login():
+    global BLINK_TOTAL, BLINK_COUNTER, BLINK_COUNT_STOP
     try:
+        target_blink_count = request.get_json()['blinkCount']
         if FACE_COUNT == 0:
             return json.dumps({"status": 500, "msg": "No face detected!"})
         elif FACE_COUNT > 1:
             return json.dumps({"status": 500, "msg": f"{FACE_COUNT} face detected! Out of which {FAKE_FACE_COUNT} are fake!"})
+        elif FACE_COUNT == 1 and FAKE_FACE_COUNT > 0:
+            return json.dumps({"status": 500, "msg": f"{FAKE_FACE_COUNT} fake face detected!"})
+        elif BLINK_TOTAL != target_blink_count:
+            BLINK_TOTAL = 0
+            BLINK_COUNTER = 0
+            BLINK_COUNT_STOP = False
+            return json.dumps({"status": 500, "msg": f"Please blink exactly {target_blink_count} times!"})
 
         global sess
         global graph
@@ -394,8 +472,14 @@ def login():
                 return json.dumps({"msg": "No one is registered in the database"})
             elif identity == "":
                 return json.dumps({"msg": "Not in the database"})
+            BLINK_TOTAL = 0
+            BLINK_COUNTER = 0
+            BLINK_COUNT_STOP = False
             return json.dumps({"identity": str(identity)})
     except:
+        BLINK_TOTAL = 0
+        BLINK_COUNTER = 0
+        BLINK_COUNT_STOP = False
         return json.dumps({"status": 500})
 
 

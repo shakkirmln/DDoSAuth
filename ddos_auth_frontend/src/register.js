@@ -4,7 +4,7 @@ import "./css/util.css";
 import "./register.css";
 // import Sketch from "react-p5";
 import axios from "axios";
-let video;
+// let video;
 export class Register extends Component {
   constructor(props) {
     super(props);
@@ -12,20 +12,20 @@ export class Register extends Component {
       signup: true,
     };
   }
-  setup(p5, canvasParentRef) {
-    p5.noCanvas();
-    video = p5.createCapture(p5.VIDEO);
-    const v = document.querySelector("video");
-    let st = "top: 300px;";
-    v.setAttribute("style", st);
-  }
+  // setup(p5, canvasParentRef) {
+  //   p5.noCanvas();
+  //   video = p5.createCapture(p5.VIDEO);
+  //   const v = document.querySelector("video");
+  //   let st = "top: 300px;";
+  //   v.setAttribute("style", st);
+  // }
 
-  stop() {
-    const tracks = document.querySelector("video").srcObject.getTracks();
-    tracks.forEach(function (track) {
-      track.stop();
-    });
-  }
+  // stop() {
+  //   const tracks = document.querySelector("video").srcObject.getTracks();
+  //   tracks.forEach(function (track) {
+  //     track.stop();
+  //   });
+  // }
 
   setup2 = async () => {
     const mood = document.getElementById("mood").value;
@@ -51,10 +51,12 @@ export class Register extends Component {
     }
     this.props.backhome();
   };
-  logout() {
+  logout = async () => {
     // this.stop();
+    const response = await axios.get("http://localhost:5000/close_video_feed");
+    console.log(response.data);
     this.props.backhome();
-  }
+  };
 
   render() {
     let signup = (
