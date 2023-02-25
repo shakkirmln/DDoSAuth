@@ -6,7 +6,9 @@ export class Home extends Component {
       <div>
         <div className="limiter">
           <div className="container-login100">
-            <div className="login100-form-title ">Welcome to our project</div>
+            <div className="login100-form-title ">
+              Welcome to our project - Request Count: {this.props.reqCnt}
+            </div>
             <div className="login100-form-title ">
               Enhanced Layer of Protection against DDoS
             </div>

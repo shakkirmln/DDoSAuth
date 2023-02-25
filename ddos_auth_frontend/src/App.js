@@ -13,6 +13,7 @@ export class App extends Component {
       signup: false,
       verify: false,
       home: true,
+      reqCnt: 0,
     };
     this.backhome = this.backhome.bind(this);
   }
@@ -33,12 +34,13 @@ export class App extends Component {
       if (timeDiff < 30000) {
         localStorage.setItem("reqCnt", parseInt(reqCnt) + parseInt(1));
         if (reqCnt > 10) {
-          this.backhome();
+          this.backhome(reqCnt);
         } else {
           this.setState({
             signup: false,
             verify: false,
             home: true,
+            reqCnt: reqCnt,
           });
         }
       } else {
@@ -46,6 +48,7 @@ export class App extends Component {
           signup: false,
           verify: false,
           home: true,
+          reqCnt: reqCnt,
         });
         localStorage.setItem("reqCnt", 1);
         localStorage.setItem("startTimestamp", endTimeStamp);
@@ -53,11 +56,12 @@ export class App extends Component {
     }
   }
 
-  backhome() {
+  backhome(reqCnt) {
     this.setState({
       signup: false,
       verify: false,
       home: false,
+      reqCnt: reqCnt,
     });
   }
   signup() {
@@ -114,7 +118,7 @@ export class App extends Component {
         {!this.state.signup && !this.state.verify && !this.state.home
           ? home
           : ""}
-        {this.state.home ? <Home /> : ""}
+        {this.state.home ? <Home reqCnt={this.state.reqCnt} /> : ""}
         {this.state.signup ? <Register backhome={this.backhome} /> : ""}
         {this.state.verify ? <Login backhome={this.backhome} /> : ""}
       </div>

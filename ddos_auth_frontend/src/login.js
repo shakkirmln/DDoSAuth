@@ -20,6 +20,7 @@ export class Login extends Component {
       captcha: randomWords(),
       captchaVerify: false,
       blinkCount: Math.floor(Math.random() * 10) + 1,
+      videoId: Math.random(),
     };
   }
 
@@ -159,7 +160,7 @@ export class Login extends Component {
               {/* <Sketch setup={this.videoDisplay} draw={this.draw} /> */}
               <img
                 className="live_video"
-                src="http://localhost:5000/video_feed"
+                src={`http://localhost:5000/video_feed/${this.state.videoId}`}
                 alt="Sorry, error in the video feed"
               />
               <div className="moving-text">

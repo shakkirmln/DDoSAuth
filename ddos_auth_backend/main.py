@@ -36,9 +36,7 @@ BLINK_TOTAL = 0
 FACE_COUNT = 0
 FAKE_FACE_COUNT = 0
 
-# eye aspect ratio to detect blink
 EYE_AR_THRESH = 0.3
-# number of consecutive frames the eye must be below the threshold
 EYE_AR_CONSEC_FRAMES = 3
 
 # extacting eyes and mouth coordinates
@@ -117,16 +115,11 @@ def generate_video_frame():
                 # filter out weak detections
                 if confidence > 0.5:
                     face_count += 1
-                    # compute the (x,y) coordinates of the bounding box
-                    # for the face and extract the face ROI
                     box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                     (startX, startY, endX, endY) = box.astype('int')
 
                     dlibRect = dlib.rectangle(startX, startY, endX, endY)
 
-                    # expand the bounding box a bit
-                    # (from experiment, the model works better this way)
-                    # and ensure that the bounding box does not fall outside of the frame
                     startX = max(0, startX-20)
                     startY = max(0, startY-20)
                     endX = min(w, endX+20)
@@ -217,7 +210,7 @@ def lip_movement_detection(shape, frame):
     bottom_lip_height = get_lip_height(bottom_lip)
     mouth_height = get_mouth_height(top_lip, bottom_lip)
 
-    if mouth_height > min(top_lip_height, bottom_lip_height) * 0.25:
+    if mouth_height > min(top_lip_height, bottom_lip_height) * 0.5:
         LIP_MOVEMENT = True
         if AUDIO_STREAM_RUNNING:
             LIP_MOVEMENT_AUDIO_STREAM = True
@@ -379,8 +372,8 @@ def close_stream():
     return Response("Stream closed", mimetype="text/plain")
 
 
-@app.route('/video_feed', methods=['GET'])
-def stream():
+@app.route('/video_feed/<id>', methods=['GET'])
+def stream(id):
     global LIP_MOVEMENT, LIPS_APART, BLINK_COUNTER, BLINK_TOTAL, STREAM_CLOSE, BLINK_COUNT_STOP
     STREAM_CLOSE = False
     BLINK_COUNT_STOP = False

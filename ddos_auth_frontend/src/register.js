@@ -10,6 +10,7 @@ export class Register extends Component {
     super(props);
     this.state = {
       signup: true,
+      videoId: Math.random(),
     };
   }
   // setup(p5, canvasParentRef) {
@@ -102,7 +103,7 @@ export class Register extends Component {
               {this.state.signup ? (
                 <img
                   className="live_video"
-                  src="http://localhost:5000/video_feed"
+                  src={`http://localhost:5000/video_feed/${this.state.videoId}`}
                   alt="Sorry, error in the video feed"
                 />
               ) : (
