@@ -1,4 +1,4 @@
-# Enhanced layer of protection again DDoS attack
+# Enhanced layer of protection against DDoS attack
 
 This project is to build an Enhanced layer of security against DDoS attack using Face and Speech recognition built in React and Flask.
 
